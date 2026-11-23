@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- kto jest kim ----
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+    // Pierwszy admin (właściciel). Może sam nadać sobie rolę admina przy pierwszym logowaniu.
+    function isOwner() {
+      return signedIn() && myEmail() == "OWNER_EMAIL";
+    }
+    function hasRole() {
+      return signedIn() && exists(/databases/$(database)/documents/roles/$(myEmail()));
+    }
+    function myRole() {
+      return hasRole() ? get(/databases/$(database)/documents/roles/$(myEmail())).data.role : "";
+    }
+    function isAdmin() { return myRole() == "admin"; }
+    function isStaff() { return myRole() in ["admin", "biuro"]; }
+    function isMember() { return myRole() in ["admin", "biuro", "druzynowy"]; }
+    function biuroAdds() {
+      return !exists(/databases/$(database)/documents/config/access)
+        || get(/databases/$(database)/documents/config/access).data.get("biuroAddItems", true) == true;
+    }
+
+    // ---- lista dostępu: zmienia tylko admin ----
+    match /roles/{email} {
+      allow read: if signedIn() && (email == myEmail() || isAdmin());
+      allow create: if isAdmin() || (isOwner() && email == myEmail() && request.resource.data.role == "admin");
+      allow update, delete: if isAdmin();
+    }
+    // prośby o dostęp: każdy tylko swoją
+    match /access/{uid} {
+      allow read: if signedIn() && (uid == request.auth.uid || isAdmin());
+      allow create, update: if signedIn() && uid == request.auth.uid && request.resource.data.email == myEmail();
+      allow delete: if isAdmin() || (signedIn() && uid == request.auth.uid);
+    }
+    // imiona i ostatnie logowanie
+    match /users/{uid} {
+      allow read: if isStaff() || (signedIn() && uid == request.auth.uid);
+      allow write: if signedIn() && uid == request.auth.uid;
+    }
+
+    // ---- katalog dla drużynowych (bez wypożyczeń, planów i usterek) ----
+    match /public/{id} {
+      allow read: if isMember();
+      allow write: if isStaff();
+    }
+    match /blobs/{id} {
+      allow read: if isMember();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ---- spis i wypożyczenia: tylko biuro i admin ----
+    match /rooms/{id} { allow read: if isStaff(); allow write: if isAdmin(); }
+    match /boxes/{id} { allow read: if isStaff(); allow write: if isAdmin(); }
+    match /items/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin() || (myRole() == "biuro" && biuroAdds());
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    match /loans/{id} { allow read, write: if isStaff(); }
+    match /issues/{id} { allow read, write: if isStaff(); }
+    match /plans/{id} { allow read, write: if isStaff(); }
+    match /log/{id} { allow read, write: if isStaff(); }
+    match /config/{id} {
+      allow read: if isMember();
+      allow write: if isAdmin() || (id == "backup" && isStaff());
+    }
+
+    // ---- wnioski: drużynowy widzi i anuluje tylko swoje ----
+    match /requests/{id} {
+      allow read: if isStaff() || (isMember() && resource.data.uid == request.auth.uid);
+      allow create: if isMember()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == "nowy";
+      allow update: if isStaff()
+        || (isMember()
+            && resource.data.uid == request.auth.uid
+            && resource.data.status == "nowy"
+            && request.resource.data.status == "anulowany"
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"]));
+      allow delete: if isStaff();
+    }
+  }
+}
