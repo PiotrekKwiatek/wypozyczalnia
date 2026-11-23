@@ -12,7 +12,7 @@ Kody QR na naklejkach prowadzą pod ten adres (`…/wypozyczalnia/#KOD`), więc 
 - Logowanie mailem i hasłem. Dostęp i rolę nadaje admin w zakładce „Użytkownicy” (lista maili):
   - **admin** – wszystko, także lista użytkowników i kategorii,
   - **biuro hufca** – wydawanie, zwroty, plany, wnioski, usterki,
-  - **drużynowy / instruktor** – spis „dostępne / niedostępne” według miejsca albo kategorii i wnioski o sprzęt.
+  - **drużynowy / instruktor** – kafelki kategorii z tym, co jest teraz dostępne (miejsce na drugim planie), i wnioski o sprzęt.
 - Na telefonie stronę można dodać do ekranu (iPhone: Safari → Udostępnij → Do ekranu początkowego; Android: Chrome → ⋮ → Zainstaluj aplikację).
 
 ## Pliki

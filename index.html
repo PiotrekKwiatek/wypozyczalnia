@@ -75,27 +75,53 @@ a.chip-btn{display:inline-flex;align-items:center;gap:4px;text-decoration:none}
 .ca-name{min-width:0;display:grid}.ca-name .hint{margin:0}
 .ca-row select{font:15px var(--f-body);padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);width:100%}
 @media (max-width:480px){.ca-row{grid-template-columns:1fr}}
-.d-ctl{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
-/* widok drużynowego: pomieszczenia jako zwijane sekcje */
-.d-rooms{flex-wrap:nowrap;overflow-x:auto;margin:10px -4px 0;padding:2px 4px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
-.d-rooms::-webkit-scrollbar{display:none}
-.d-rooms button{flex:none;white-space:nowrap;scroll-snap-align:start}
 .d-n{font-weight:500;opacity:.65;margin-left:2px;font-variant-numeric:tabular-nums}
-.d-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:40px;margin:6px 0 8px}
-.d-bar .meta{margin:0}
-.d-grp{margin:0 0 8px}
-.d-grp>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
-.d-grp>summary::-webkit-details-marker{display:none}
-.d-grp>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-@media (hover:hover){.d-grp>summary:hover{background:var(--surface-2)}}
-.d-grp[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0;background:var(--surface-2)}
-.d-grp[open]>.list{border-top:0;border-top-left-radius:0;border-top-right-radius:0}
-.d-grp-t{flex:1;min-width:0;display:grid;gap:2px}
-.d-grp-name{min-width:0;font:700 16px/1.2 var(--f-display);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.d-grp-n{font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums}
-.d-grp-ic{flex:none;width:9px;height:9px;margin:0 4px 3px 2px;border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(45deg);transition:transform .15s}
-.d-grp[open] .d-grp-ic{transform:rotate(-135deg);margin-bottom:-3px}
 .d-loc{font-size:13px;color:var(--ink-3);margin-left:4px}
+/* widok drużynowego (24.11): kafelki kategorii, najpierw dostępność, miejsce na drugim planie */
+.dk-hint{margin-top:-10px}
+a.dk-all,a.dk-tile,a.dk-place{color:var(--ink);text-decoration:none;-webkit-tap-highlight-color:transparent;border:1px solid var(--line);background:var(--surface);transition:border-color .12s,background .12s,transform .08s}
+a.dk-all:active,a.dk-tile:active,a.dk-place:active{transform:scale(.985);background:var(--surface-2)}
+@media (hover:hover){a.dk-all:hover,a.dk-tile:hover,a.dk-place:hover{border-color:var(--ink-3)}}
+a.dk-all:focus-visible,a.dk-tile:focus-visible,a.dk-place:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.dk-all{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;box-shadow:var(--shadow)}
+.dk-all .dk-ic{background:var(--accent);color:var(--on-accent)}
+.dk-t{flex:1;min-width:0;display:grid;gap:5px}
+.dk-all .dk-name{font-size:19px}
+.dk-ic{flex:none;width:42px;height:42px;border-radius:11px;background:var(--surface-2);color:var(--ink-2);display:grid;place-items:center}
+.dk-ic svg{width:23px;height:23px}
+.dk-name{font:700 16px/1.2 var(--f-display);font-stretch:106%;overflow-wrap:anywhere}
+.dk-av{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.dk-av b{color:var(--ok);font-weight:700;font-size:15px}
+.dk-bar{display:block;height:5px;border-radius:99px;background:var(--surface-2);overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
+.dk-bar i{display:block;height:100%;border-radius:inherit;background:var(--ok)}
+.dk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:640px){.dk-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.dk-tile{display:grid;grid-template-rows:auto 1fr auto auto;gap:7px;min-height:138px;padding:13px 13px 14px;border-radius:14px}
+.dk-tile.dk-none .dk-ic{opacity:.55}
+.dk-tile.dk-none .dk-av{color:var(--ink-3)}
+.dk-places{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media (min-width:640px){.dk-places{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.dk-place{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:46px;padding:8px 12px;border-radius:10px;font:500 14px/1.25 var(--f-body)}
+.dk-pn{min-width:0;overflow-wrap:anywhere}
+.dk-pc{flex:none;min-width:24px;text-align:center;font:600 12px/1 var(--f-mono);color:var(--ink-3);background:var(--surface-2);border-radius:99px;padding:4px 6px}
+.seg.dk-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;padding:3px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);margin-top:-6px}
+.seg.dk-seg button{min-height:42px;padding:0 8px;border:0;border-radius:9px;background:transparent;font-size:14px;color:var(--ink-2)}
+.seg.dk-seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(19,28,37,.12),0 0 0 1px var(--line)}
+:root[data-theme="dark"] .seg.dk-seg button[aria-pressed="true"]{background:var(--line);box-shadow:none}
+.dk-sec .sec-head{min-height:22px}
+.dk-szt{font:500 13px/1 var(--f-body);color:var(--ink-3);white-space:nowrap}
+body.role-druzynowy .row-wrap .row-sub{display:flex;align-items:center;gap:8px}
+body.role-druzynowy .row-wrap .row-sub .chip{flex:none;max-width:none}
+body.role-druzynowy .row-wrap .d-loc{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-wrap.dk-na .row-title{color:var(--ink-2)}
+.row-wrap.dk-na .thumb{opacity:.6}
+.dk-fam{border:1px solid var(--line);border-radius:10px;padding:0 12px}
+.dk-fam>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600;font-size:14px;color:var(--ink-2)}
+.dk-mem{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:0}
+.dk-mem li{display:grid;grid-template-columns:52px auto minmax(0,1fr);gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.dk-mem .chip{max-width:none}
+.dk-mem .d-loc{margin:0;overflow-wrap:anywhere}
+.dk-mn{font:600 13px/1 var(--f-mono)}
 .d-where{margin:0;font-size:15px;color:var(--ink-2)}
 </style>
 <script>
@@ -3105,7 +3131,7 @@ async function boot(){
 }
 boot();
 </script>
-<script src="./prod.js?v=20261123-offline3"></script>
+<script src="./prod.js?v=20261124-kafelki"></script>
 <script>if ("serviceWorker" in navigator) addEventListener("load", function(){ navigator.serviceWorker.register("./sw.js").catch(function(e){ console.warn("sw", e); }); });</script>
 
 </body></html>

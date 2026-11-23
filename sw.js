@@ -1,7 +1,7 @@
 // Wypożyczalnia Hufca: aplikacja na telefonie i praca przy słabym zasięgu.
 // Pliki aplikacji: najpierw sieć (żeby poprawki docierały od razu), bez sieci z pamięci.
 // Dane (Firebase) idą osobno i nie są tu buforowane – Firestore ma własną pamięć offline.
-const CACHE = "wypozyczalnia-20261123d";
+const CACHE = "wypozyczalnia-20261124a";
 const CORE = ["./", "./index.html", "./prod.js", "./fb.js", "./config.js", "./manifest.webmanifest",
   "./icons/apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png",
   "./vendor/firebase-app.js", "./vendor/firebase-auth.js", "./vendor/firebase-firestore.js",

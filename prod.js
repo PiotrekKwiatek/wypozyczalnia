@@ -220,90 +220,216 @@
     return _render();
   };
 
-  /* ---------- widok drużynowego ---------- */
+  /* ---------- widok drużynowego ----------
+     24.11: najpierw „co jest dostępne”: kafelki kategorii z liczbą wolnych rzeczy, po kliknięciu lista kategorii.
+     Gdzie co leży jest na drugim planie: szary dopisek przy rzeczy i mniejsze kafelki „Według miejsca”. */
   function catList(){ return Object.keys(S.cat).map(function(id){ return Object.assign({id:id}, S.cat[id]); }); }
   function findCat(code){
     var c = String(code || "").toUpperCase(); if (S.cat[c]) return c;
     var hit = Object.keys(S.cat).find(function(id){ return (S.cat[id].c || []).indexOf(c) >= 0; }); return hit || null;
   }
-  function dThumb(e){ return e.p ? '<img class="thumb" src="' + esc(INW_BLOB(e.p)) + '" data-blob="' + esc(e.p) + '" alt="" loading="lazy">' : '<span class="thumb ph">' + IC.item + '</span>'; }
+  function dThumb(e){ return e && e.p ? '<img class="thumb" src="' + esc(INW_BLOB(e.p)) + '" data-blob="' + esc(e.p) + '" alt="" loading="lazy">' : '<span class="thumb ph">' + IC.item + '</span>'; }
   function availTxt(e){ return e.a > 0 ? (e.q > 1 ? "dostępne " + e.a + " z " + e.q : "dostępne") : "teraz niedostępne"; }
   var NOROOM = "Bez pomieszczenia", NOCAT_D = "Bez kategorii";
   function roomOf(e){ return e.r || NOROOM; }
   function catOf(e){ return e.k || NOCAT_D; }
   function locTxt(e, withRoom){ return [withRoom ? e.r : "", e.b ? "pudło: " + e.b : ""].filter(Boolean).join(" · "); }
-  // drużynowy przegląda sprzęt wg miejsca albo wg kategorii (zapamiętane w przeglądarce)
-  S.dBy = (function(){ try { return localStorage.getItem("inwh-dby") === "cat" ? "cat" : "room"; } catch (_){ return "room"; } })();
-  function keyOf(e){ return S.dBy === "cat" ? catOf(e) : roomOf(e); }
-  function groupsOf(list){
-    var m = new Map(), cl = typeof catsList === "function" ? catsList() : [];
-    list.forEach(function(e){
-      var k = keyOf(e), o;
-      if (S.dBy === "cat"){ var ix = e.k ? cl.indexOf(e.k) : -1; o = !e.k ? 1e6 : (ix >= 0 ? ix : 500); }
-      else o = e.r ? (typeof e.ro === "number" ? e.ro : 999) : 1e6;
-      if (!m.has(k)) m.set(k, {name:k, o:o, items:[]}); m.get(k).items.push(e);
+  function inCart(id){ return S.dcart.find(function(x){ return x.itemId === id; }); }
+
+  // Rzeczy numerowane („Namiot NS 4-osobowy nr 1”, „nr 2”, „nr 3”) to dla drużynowego jedna pozycja: „dostępne 2 z 3”.
+  // Łączymy tylko pojedyncze sztuki o tej samej nazwie i kategorii, gdy w spisie są co najmniej dwie.
+  var FAM_RE = /^(.*\S)[\s,]*(?:nr\.?|no\.?|#)\s*(\d+)$/i;
+  function famsOf(all){
+    var by = new Map(), out = {};
+    all.forEach(function(e){
+      var m = e.q === 1 ? FAM_RE.exec(String(e.n || "").trim()) : null; if (!m) return;
+      var base = m[1].replace(/[\s,–-]+$/, ""), key = catOf(e) + "|" + norm(base);
+      if (!by.has(key)) by.set(key, []); by.get(key).push({id:e.id, base:base, num:+m[2]});
     });
-    return Array.from(m.values()).sort(function(a, b){ return a.o - b.o || a.name.localeCompare(b.name, "pl", {numeric:true}); });
+    by.forEach(function(l, key){ if (l.length > 1) l.forEach(function(x){ out[x.id] = {key:key, base:l[0].base, num:x.num}; }); });
+    return out;
   }
-  // które grupy drużynowy ma rozwinięte (zapamiętane w przeglądarce); domyślnie wszystkie zwinięte
-  S.dSel = {room:"", cat:""}; S.dOpen = (function(){ try { var v = JSON.parse(localStorage.getItem("inwh-dopen") || "[]"); return new Set(Array.isArray(v) ? v : []); } catch (_){ return new Set(); } })();
-  function openKey(name){ return S.dBy + ":" + name; }
-  function saveDOpen(){ try { localStorage.setItem("inwh-dopen", JSON.stringify(Array.from(S.dOpen))); } catch (_){} }
-  function dRow(e, withRoom){
-    var c = S.dcart.find(function(x){ return x.itemId === e.id; }), loc = locTxt(e, withRoom || S.dBy === "cat");
+  function entriesOf(list, fams){
+    var out = [], fm = new Map();
+    list.forEach(function(e){
+      var f = fams[e.id];
+      if (!f){ out.push({id:e.id, n:e.n, k:e.k, q:e.q, a:e.a, items:[e]}); return; }
+      var d = fm.get(f.key);
+      if (!d){ d = {id:"f:" + f.key, fam:f.key, n:f.base, k:e.k, q:0, a:0, items:[]}; fm.set(f.key, d); out.push(d); }
+      d.items.push(e); d.q++; if (e.a > 0) d.a++;
+    });
+    return out.map(function(d){
+      if (!d.fam) return d;
+      if (d.items.length === 1){ var e = d.items[0]; return {id:e.id, n:e.n, k:e.k, q:e.q, a:e.a, items:[e]}; }
+      d.items.sort(function(x, y){ return fams[x.id].num - fams[y.id].num; }); return d;
+    });
+  }
+  function byAvail(a, b){ return (b.a > 0) - (a.a > 0) || a.n.localeCompare(b.n, "pl", {numeric:true}); }
+  function catOrder(){ var cl = typeof catsList === "function" ? catsList() : []; return function(name){ if (name === NOCAT_D) return 1e6; var i = cl.indexOf(name); return i >= 0 ? i : 500; }; }
+  function byCat(E){
+    var m = new Map(), ord = catOrder();
+    E.forEach(function(d){ var k = catOf(d); if (!m.has(k)) m.set(k, []); m.get(k).push(d); });
+    return Array.from(m.entries()).map(function(p){ return {name:p[0], o:ord(p[0]), list:p[1]}; })
+      .sort(function(a, b){ return a.o - b.o || a.name.localeCompare(b.name, "pl", {numeric:true}); });
+  }
+  // dostępność grupy: ile pozycji ma coś wolnego, a pasek pokazuje, jaka część sztuk leży teraz w magazynie
+  function avOf(E){
+    var t = E.length, a = 0, full = 0, fr = 0;
+    E.forEach(function(d){ if (d.a > 0) a++; if (d.a >= d.q) full++; fr += d.q > 0 ? Math.min(1, Math.max(0, d.a / d.q)) : 0; });
+    return {t:t, a:a, full:full, fr:t ? fr / t : 0};
+  }
+  function avLine(s){
+    if (!s.t) return "pusto";
+    if (s.full === s.t) return s.t === 1 ? "dostępne" : "wszystko dostępne";
+    if (!s.a) return "teraz wszystko zajęte";
+    return "dostępne <b>" + s.a + "</b> z " + s.t + (s.a === s.t ? ", część wydana" : "");
+  }
+  function avBar(s){ return '<span class="dk-bar" aria-hidden="true"><i style="width:' + Math.round(s.fr * 100) + '%"></i></span>'; }
+  var CIC = (function(){
+    var s = function(d){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; };
+    return {
+      tent: s('<path d="M12 4.5 3 19.5h18L12 4.5Z"/><path d="M9 19.5 12 14l3 5.5"/>'),
+      pot: s('<path d="M5 10.5h14v6a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-6Z"/><path d="M3 10.5h18M10 4.5c-.8.9-.8 1.9 0 2.8M14 4.5c-.8.9-.8 1.9 0 2.8"/>'),
+      axe: s('<path d="M5 20 14 11"/><path d="M12 6.5 15 3.5c2.6 1.1 4.4 2.9 5.5 5.5l-3 3c-.6-2.3-2.2-4-5.5-5.5Z"/>'),
+      tool: s('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9l-3.8 3.8Z"/>'),
+      plug: s('<path d="M9 3.5v4.5M15 3.5v4.5M6.5 8h11v3.5a5.5 5.5 0 0 1-11 0V8ZM12 17v3.5"/>'),
+      flag: s('<path d="M5.5 21V4M5.5 4.5h12l-2.5 4 2.5 4h-12"/>'),
+      chair: s('<path d="M7.5 3.5v9M16.5 3.5v9M7.5 7.5h9M5.5 12.5h13M7 12.5 6 20.5M17 12.5l1 8"/>'),
+      aid: s('<rect x="3.5" y="7" width="17" height="12.5" rx="2"/><path d="M9 7V4.5h6V7M12 10.5v6M9 13.5h6"/>')
+    };
+  })();
+  function catIcon(name){
+    var n = norm(name);
+    if (/biwak|namiot|nocleg|span/.test(n)) return CIC.tent;
+    if (/kuch|gotow|garn/.test(n)) return CIC.pot;
+    if (/pionier|siekier/.test(n)) return CIC.axe;
+    if (/narzedz|warszt/.test(n)) return CIC.tool;
+    if (/elektr|naglos|audio|multimed/.test(n)) return CIC.plug;
+    if (/program|gry|zabaw|szkolen/.test(n)) return CIC.flag;
+    if (/mebl|wyposaz/.test(n)) return CIC.chair;
+    if (/pomoc|apteczk|medyc|ratown/.test(n)) return CIC.aid;
+    return IC.box;
+  }
+  function dHref(kind, v){ return "#" + kind + (v != null ? "/" + encodeURIComponent(v) : ""); }
+  function dRoute(h){
+    if (h === "wszystko") return {t:"all"};
+    if (h.indexOf("kategoria/") === 0) return {t:"cat", v:h.slice(10)};
+    if (h.indexOf("miejsce/") === 0) return {t:"room", v:h.slice(8)};
+    return null;
+  }
+
+  function dRow(e, scope){
+    var c = inCart(e.id), loc = scope.t === "room" ? (e.b ? "pudło: " + e.b : "") : locTxt(e, true);
     var btn = '<button type="button" class="cart-btn' + (c ? " on" : "") + '" data-act="d-add" data-id="' + e.id + '" aria-label="' + (c ? "We wniosku, zmień" : "Dodaj do wniosku") + ': ' + esc(e.n) + '">' + (c ? (e.q > 1 ? '<span class="cq">×' + c.qty + '</span>' : IC.check) : IC.plus) + '</button>';
-    return '<div class="row-wrap"><button type="button" class="row" data-act="d-item" data-id="' + e.id + '">' + dThumb(e) + '<div class="row-main"><div class="row-title">' + esc(e.n) + '</div><div class="row-sub"><span class="chip ' + (e.a > 0 ? "ok" : "mute") + '">' + availTxt(e) + '</span>' + (loc ? ' <span class="d-loc">' + esc(loc) + '</span>' : "") + '</div></div></button>' + btn + '</div>';
+    return '<div class="row-wrap' + (e.a > 0 ? "" : " dk-na") + '"><button type="button" class="row" data-act="d-item" data-id="' + e.id + '">' + dThumb(e) + '<div class="row-main"><div class="row-title">' + esc(e.n) + '</div><div class="row-sub"><span class="chip ' + (e.a > 0 ? "ok" : "mute") + '">' + availTxt(e) + '</span>' + (loc ? ' <span class="d-loc">' + esc(loc) + '</span>' : "") + '</div></div></button>' + btn + '</div>';
   }
+  function dRowE(d, scope){
+    if (!d.fam) return dRow(d.items[0], scope);
+    var nc = d.items.filter(function(e){ return inCart(e.id); }).length;
+    var rooms = d.items.map(roomOf).filter(function(r, i, a){ return a.indexOf(r) === i; });
+    var loc = scope.t === "room" ? "" : rooms.length === 1 ? rooms[0] : "w " + rooms.length + " miejscach";
+    var p = d.items.find(function(e){ return e.p; }), room = scope.t === "room" ? ' data-r="' + esc(scope.v) + '"' : "";
+    var chip = d.a > 0 ? "dostępne " + d.a + " z " + d.q : "teraz niedostępne";
+    return '<div class="row-wrap' + (d.a > 0 ? "" : " dk-na") + '"><button type="button" class="row" data-act="d-fam" data-f="' + esc(d.fam) + '"' + room + '>' + dThumb(p) + '<div class="row-main"><div class="row-title">' + esc(d.n) + ' <span class="dk-szt">' + d.q + ' szt.</span></div><div class="row-sub"><span class="chip ' + (d.a > 0 ? "ok" : "mute") + '">' + chip + '</span>' + (loc ? ' <span class="d-loc">' + esc(loc) + '</span>' : "") + '</div></div></button>'
+      + '<button type="button" class="cart-btn' + (nc ? " on" : "") + '" data-act="d-fam" data-f="' + esc(d.fam) + '"' + room + ' aria-label="' + (nc ? "We wniosku, zmień" : "Dodaj do wniosku") + ': ' + esc(d.n) + '">' + (nc ? '<span class="cq">×' + nc + '</span>' : IC.plus) + '</button></div>';
+  }
+
   function renderDruz(){
     S.pendingRender = false;
     var h = decodeURIComponent(location.hash.replace(/^#/, "")), cur = h === "wnioski" ? "wnioski" : "home";
     $$("#tabs [data-tab]").forEach(function(t){ t.dataset.tab === cur ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current"); });
-    var bb = $("#back-btn"); if (bb) bb.hidden = true;
+    var q = !!S.q.trim(), scope = cur === "home" ? dRoute(h) : null;
+    // przycisk „Wróć” w miejscu logo, gdy jesteśmy w kategorii, w miejscu albo w wynikach wyszukiwania
+    var sub = q || !!scope, bb = $("#back-btn"), br = $("#brand"); if (bb) bb.hidden = !sub; if (br) br.hidden = sub;
     updateCartBar();
     var html;
     if (!S.got.catalog || !S.got.myrequests) html = loadingView();
-    else if (cur === "wnioski" && !S.q.trim()) html = viewMyRequests();
-    else html = viewCatalog(h && cur !== "wnioski" ? findCat(h) : null);
+    else if (cur === "wnioski" && !q) html = viewMyRequests();
+    else html = viewCatalog(scope, h && cur === "home" && !scope ? findCat(h) : null);
     $("#main").innerHTML = html;
   }
-  function viewCatalog(focusId){
-    var q = S.q.trim(), n = norm(q), cq = q.toUpperCase().replace(/[\s\-]/g, "");
-    var all = catList(), base = all;
-    if (n) base = base.filter(function(e){ return norm(e.n).indexOf(n) >= 0 || norm(e.b || "").indexOf(n) >= 0 || norm(e.k || "").indexOf(n) >= 0 || (cq.length >= 3 && [e.id].concat(e.c || []).some(function(c){ return c.indexOf(cq) >= 0; })); });
-    if (S.dOnlyAvail) base = base.filter(function(e){ return e.a > 0; });
-    base.sort(function(a, b){ return a.n.localeCompare(b.n, "pl", {numeric:true}); });
+  function viewCatalog(scope, focusId){
+    var all = catList(), fams = famsOf(all);
     if (focusId){ history.replaceState(null, "", location.pathname + location.search); setTimeout(function(){ dItem(focusId); }, 0); }
-    var head = '<div class="head"><div class="head-text"><div class="eyebrow">Sprzęt hufca</div><h1>' + (q ? "Wyniki: " + esc(q) : "Co jest w magazynie") + '</h1></div></div>';
-    if (!all.length) return head + '<div class="empty"><h2>Spis jest jeszcze pusty</h2><p>Biuro hufca jeszcze nie dodało sprzętu.</p></div>';
-    // filtr pomieszczeń albo kategorii: liczby uwzględniają wyszukiwanie i „Dostępne teraz”
-    var sel = S.dSel[S.dBy] || "", rooms = groupsOf(base), list = sel ? base.filter(function(e){ return keyOf(e) === sel; }) : base;
-    if (sel && !rooms.some(function(g){ return g.name === sel; })) rooms.push({name:sel, items:[]});
-    var groups = groupsOf(list), force = !!n || !!sel || groups.length === 1;
-    var allOpen = groups.length > 0 && groups.every(function(g){ return S.dOpen.has(openKey(g.name)); });
-    var hasCats = all.some(function(e){ return e.k; });
-    var by = hasCats ? '<div class="seg d-by" role="group" aria-label="Układ listy"><button type="button" data-act="d-by" data-f="room" aria-pressed="' + (S.dBy === "room") + '">Wg miejsca</button><button type="button" data-act="d-by" data-f="cat" aria-pressed="' + (S.dBy === "cat") + '">Wg kategorii</button></div>' : "";
-    var chips = rooms.length > 1 || sel ? '<div class="seg d-rooms" role="group" aria-label="' + (S.dBy === "cat" ? "Kategoria" : "Pomieszczenie") + '"><button type="button" data-act="d-room" data-f="" aria-pressed="' + !sel + '">' + (S.dBy === "cat" ? "Wszystkie" : "Wszędzie") + ' <span class="d-n">' + base.length + '</span></button>'
-      + rooms.map(function(g){ return '<button type="button" data-act="d-room" data-f="' + esc(g.name) + '" aria-pressed="' + (sel === g.name) + '">' + esc(g.name) + ' <span class="d-n">' + g.items.length + '</span></button>'; }).join("") + '</div>' : "";
-    var grp = function(g){
-      var av = g.items.filter(function(e){ return e.a > 0; }).length;
-      return '<details class="d-grp" data-room="' + esc(g.name) + '"' + (force ? ' data-force="1" open' : S.dOpen.has(openKey(g.name)) ? " open" : "") + '><summary><span class="d-grp-t"><span class="d-grp-name">' + esc(g.name) + '</span><span class="d-grp-n">' + g.items.length + ' ' + pl(g.items.length, "rzecz", "rzeczy", "rzeczy") + (S.dOnlyAvail ? "" : ' · ' + (av === g.items.length ? (av === 1 ? "dostępna" : "wszystkie dostępne") : av === 0 ? (g.items.length === 1 ? "teraz niedostępna" : "teraz wszystko zajęte") : av + ' ' + pl(av, "dostępna", "dostępne", "dostępnych"))) + '</span></span><span class="d-grp-ic" aria-hidden="true"></span></summary>'
-        + '<div class="list">' + g.items.map(function(e){ return dRow(e, false); }).join("") + '</div></details>';
-    };
-    return head + '<p class="hint">Wybierz rzeczy przyciskiem + i wyślij wniosek. Biuro hufca odpowie, a status zobaczysz w zakładce „Moje wnioski”.</p>'
-      + '<div class="d-ctl"><div class="seg" role="group" aria-label="Filtr"><button type="button" data-act="d-only" data-f="0" aria-pressed="' + !S.dOnlyAvail + '">Wszystko</button><button type="button" data-act="d-only" data-f="1" aria-pressed="' + S.dOnlyAvail + '">Dostępne teraz</button></div>' + by + '</div>'
-      + chips
-      + '<div class="d-bar"><p class="meta">' + list.length + ' ' + pl(list.length, "rzecz", "rzeczy", "rzeczy") + (groups.length > 1 ? (S.dBy === "cat" ? ' w ' + groups.length + ' ' + pl(groups.length, "kategorii", "kategoriach", "kategoriach") : ' w ' + groups.length + ' ' + pl(groups.length, "miejscu", "miejscach", "miejscach")) : "") + '</p>'
-      + (!force && groups.length > 1 ? '<button type="button" class="btn btn-sm btn-ghost" data-act="d-openall" data-f="' + (allOpen ? "0" : "1") + '">' + (allOpen ? "Zwiń wszystko" : "Rozwiń wszystko") + '</button>' : "") + '</div>'
-      + (list.length ? groups.map(grp).join("") : '<div class="empty"><h2>Nic nie pasuje</h2><p>Zmień wyszukiwanie albo filtr.</p></div>');
+    if (!all.length) return '<div class="head"><div class="head-text"><div class="eyebrow">Sprzęt hufca</div><h1>Co jest w magazynie</h1></div></div><div class="empty"><h2>Spis jest jeszcze pusty</h2><p>Biuro hufca jeszcze nie dodało sprzętu.</p></div>';
+    if (S.q.trim()) return dList({t:"q"}, all, fams);
+    if (scope) return dList(scope, all, fams);
+    return dHome(all, fams);
   }
-  // zapamiętuj, które pomieszczenia drużynowy rozwinął (zdarzenie toggle nie „bąbelkuje”, więc łapiemy je w fazie przechwytywania)
-  document.addEventListener("toggle", function(ev){
-    var d = ev.target; if (!d || !d.classList || !d.classList.contains("d-grp") || d.dataset.force) return;
-    var k = openKey(d.dataset.room); if (d.open) S.dOpen.add(k); else S.dOpen.delete(k); saveDOpen();
-    var ta = document.querySelector('[data-act="d-openall"]'); if (!ta) return;
-    var ds = Array.from(document.querySelectorAll(".d-grp")), allOpen = ds.length && ds.every(function(x){ return x.open; });
-    ta.dataset.f = allOpen ? "0" : "1"; ta.textContent = allOpen ? "Zwiń wszystko" : "Rozwiń wszystko";
-  }, true);
+  function dHome(all, fams){
+    var E = entriesOf(all, fams), st = avOf(E);
+    var html = '<div class="head"><div class="head-text"><div class="eyebrow">Sprzęt hufca</div><h1>Co jest w magazynie</h1></div></div>'
+      + '<p class="hint dk-hint">Wybierz kategorię albo wpisz nazwę w wyszukiwarce u góry. Rzeczy dodajesz do wniosku przyciskiem +.</p>'
+      + '<a class="dk-all" href="#wszystko"><span class="dk-ic">' + IC.list + '</span><span class="dk-t"><span class="dk-name">Cały sprzęt</span><span class="dk-av">' + avLine(st) + '</span>' + avBar(st) + '</span>' + IC.chev + '</a>';
+    if (all.some(function(e){ return e.k; })){
+      html += '<section class="sec"><div class="sec-head"><h2 class="sec-title">Kategorie</h2></div><div class="dk-grid">' + byCat(E).map(function(g){
+        var s = avOf(g.list);
+        return '<a class="dk-tile' + (s.a ? "" : " dk-none") + '" href="' + dHref("kategoria", g.name) + '"><span class="dk-ic">' + catIcon(g.name) + '</span><span class="dk-name">' + esc(g.name) + '</span><span class="dk-av">' + avLine(s) + '</span>' + avBar(s) + '</a>';
+      }).join("") + '</div></section>';
+    }
+    // gdzie co leży: na drugim planie, mniejsze kafelki
+    var rm = new Map();
+    all.forEach(function(e){ var k = roomOf(e); if (!rm.has(k)) rm.set(k, {name:k, o:e.r ? (typeof e.ro === "number" ? e.ro : 999) : 1e6, items:[]}); rm.get(k).items.push(e); });
+    var rooms = Array.from(rm.values()).sort(function(a, b){ return a.o - b.o || a.name.localeCompare(b.name, "pl", {numeric:true}); });
+    if (rooms.length > 1 || !all.some(function(e){ return e.k; })){
+      html += '<section class="sec"><div class="sec-head"><h2 class="sec-title">Według miejsca</h2></div><div class="dk-places">' + rooms.map(function(g){
+        var n = entriesOf(g.items, fams).length;
+        return '<a class="dk-place" href="' + dHref("miejsce", g.name) + '"><span class="dk-pn">' + esc(g.name) + '</span><span class="dk-pc">' + n + '</span></a>';
+      }).join("") + '</div></section>';
+    }
+    return html;
+  }
+  function dList(scope, all, fams){
+    var q = S.q.trim(), n = norm(q), cq = q.toUpperCase().replace(/[\s\-]/g, ""), items = all;
+    if (scope.t === "cat") items = items.filter(function(e){ return catOf(e) === scope.v; });
+    if (scope.t === "room") items = items.filter(function(e){ return roomOf(e) === scope.v; });
+    if (n) items = items.filter(function(e){ return [e.n, e.b, e.k, e.r].some(function(v){ return norm(v || "").indexOf(n) >= 0; }) || (cq.length >= 3 && [e.id].concat(e.c || []).some(function(c){ return c.indexOf(cq) >= 0; })); });
+    var E = entriesOf(items, fams), av = E.filter(function(d){ return d.a > 0; }).length;
+    var shown = (S.dOnlyAvail ? E.filter(function(d){ return d.a > 0; }) : E).sort(byAvail);
+    var eyebrow = scope.t === "cat" ? "Kategoria" : scope.t === "room" ? "Miejsce" : scope.t === "q" ? "Wyszukiwanie" : "Sprzęt hufca";
+    var title = scope.t === "q" ? "Wyniki: " + q : scope.t === "all" ? "Cały sprzęt" : scope.v;
+    var html = '<div class="head"><div class="head-text"><div class="eyebrow">' + eyebrow + '</div><h1>' + esc(title) + '</h1></div></div>';
+    if (!E.length) return html + '<div class="empty"><h2>Nic nie pasuje</h2><p>' + (q ? "Spróbuj innej nazwy albo krótszego słowa." : "Tu nie ma jeszcze żadnego sprzętu.") + '</p><div class="actions"><a class="btn" href="#">Wszystkie kategorie</a></div></div>';
+    html += '<div class="seg dk-seg" role="group" aria-label="Co pokazać"><button type="button" data-act="d-only" data-f="0" aria-pressed="' + !S.dOnlyAvail + '">Wszystko <span class="d-n">' + E.length + '</span></button><button type="button" data-act="d-only" data-f="1" aria-pressed="' + S.dOnlyAvail + '">Dostępne teraz <span class="d-n">' + av + '</span></button></div>';
+    if (!shown.length) return html + '<div class="empty"><h2>Teraz nic tu nie jest wolne</h2><p>Wszystko jest wydane albo w naprawie. Możesz wysłać wniosek na późniejszy termin, biuro sprawdzi dostępność.</p><div class="actions"><button type="button" class="btn" data-act="d-only" data-f="0">Pokaż wszystko</button></div></div>';
+    if (scope.t === "cat") return html + '<div class="list">' + shown.map(function(d){ return dRowE(d, scope); }).join("") + '</div>';
+    var groups = byCat(shown);
+    if (groups.length === 1) return html + '<div class="list">' + shown.map(function(d){ return dRowE(d, scope); }).join("") + '</div>';
+    return html + groups.map(function(g){
+      return '<section class="sec dk-sec"><div class="sec-head"><h2 class="sec-title">' + esc(g.name) + '<span class="n">' + g.list.length + '</span></h2></div><div class="list">' + g.list.map(function(d){ return dRowE(d, scope); }).join("") + '</div></section>';
+    }).join("");
+  }
+  // rodzina numerowanych sztuk: drużynowy mówi, ile potrzebuje, a do wniosku trafiają najpierw wolne sztuki
+  function dFam(key, room){
+    var all = catList(), fams = famsOf(all);
+    var M = all.filter(function(e){ return fams[e.id] && fams[e.id].key === key && (!room || roomOf(e) === room); }).sort(function(x, y){ return fams[x.id].num - fams[y.id].num; });
+    if (!M.length) return;
+    if (M.length === 1) return dItem(M[0].id);
+    var base = fams[M[0].id].base, free = M.filter(function(e){ return e.a > 0; }), had = M.filter(function(e){ return inCart(e.id); }), p = M.find(function(e){ return e.p; });
+    var mem = M.map(function(e){ return '<li><span class="dk-mn">nr ' + fams[e.id].num + '</span><span class="chip ' + (e.a > 0 ? "ok" : "mute") + '">' + (e.a > 0 ? "dostępny" : "teraz niedostępny") + '</span><span class="d-loc">' + esc(locTxt(e, true) || "—") + '</span></li>'; }).join("");
+    openSheet(base, '<form class="f" novalidate>'
+      + (p ? '<img class="d-photo" src="' + esc(INW_BLOB(p.p)) + '" data-blob="' + esc(p.p) + '" alt="">' : "")
+      + '<p><span class="chip ' + (free.length ? "ok" : "mute") + '">' + (free.length ? "dostępne " + free.length + " z " + M.length : "teraz niedostępne") + '</span></p>'
+      + (M[0].k ? '<p class="d-where"><b>Kategoria:</b> ' + esc(M[0].k) + '</p>' : "")
+      + (!free.length ? '<p class="hint">Teraz wszystkie sztuki są wydane albo w naprawie. Możesz o nie poprosić na późniejszy termin, biuro sprawdzi dostępność.</p>' : "")
+      + '<div class="field"><label for="d-qty">Ile sztuk potrzebujesz?</label><input id="d-qty" class="inp qty-in" type="number" inputmode="numeric" min="1" max="' + M.length + '" value="' + (had.length || 1) + '"><p class="hint" id="d-qh"></p></div>'
+      + '<details class="dk-fam"><summary>Które sztuki i gdzie leżą</summary><ul class="dk-mem">' + mem + '</ul></details>'
+      + '<div class="form-actions">' + (had.length ? '<button type="button" class="btn btn-ghost btn-danger" data-x="rm">Usuń z wniosku</button>' : "") + '<span class="spacer"></span><button type="button" class="btn" data-act="close-sheet">Zamknij</button><button type="submit" class="btn btn-primary">' + (had.length ? "Zapisz" : "Dodaj do wniosku") + '</button></div></form>', function(w){
+      var f = $("form", w), qi = $("#d-qty", w), qh = $("#d-qh", w);
+      var fl = free.length, upd = function(){ var v = clampInt(qi.value, 1, M.length); qh.textContent = v > fl ? (fl ? "Teraz " + pl(fl, "wolna jest", "wolne są", "wolnych jest") + " " + fl + " szt." : "Teraz żadna nie jest wolna.") + " Biuro sprawdzi, czy na Twój termin starczy." : ""; };
+      qi.addEventListener("input", upd); upd();
+      var ids = M.map(function(e){ return e.id; }), drop = function(){ S.dcart = S.dcart.filter(function(x){ return ids.indexOf(x.itemId) < 0; }); };
+      var rm = $('[data-x="rm"]', w);
+      if (rm) rm.addEventListener("click", function(){ drop(); saveDcart(); closeSheet(); render(); toast("Usunięto z wniosku: " + base); });
+      f.addEventListener("submit", function(ev){
+        ev.preventDefault();
+        var qty = clampInt(qi.value, 1, M.length), rank = function(e){ return (e.a > 0 ? 0 : 2) + (inCart(e.id) ? 0 : 1); };
+        var pick = M.slice().sort(function(x, y){ return rank(x) - rank(y) || fams[x.id].num - fams[y.id].num; }).slice(0, qty);
+        drop(); pick.forEach(function(e){ S.dcart.push({itemId:e.id, qty:1}); });
+        saveDcart(); closeSheet(); render(); toast(had.length ? "Zapisano: " + base + " ×" + qty : "Dodano do wniosku: " + base + (qty > 1 ? " ×" + qty : ""));
+      });
+    }, {noFocus:true});
+  }
   function dItem(id){
     var e = S.cat[id]; if (!e) return;
     var c = S.dcart.find(function(x){ return x.itemId === id; });
@@ -489,7 +615,7 @@
   var _viewHome2 = viewHome;
   viewHome = function(){ var h = _viewHome2(); return ready() ? installStrip() + h : h; };
   var _viewCatalog = viewCatalog;
-  viewCatalog = function(f){ return installStrip() + _viewCatalog(f); };
+  viewCatalog = function(scope, focusId){ return (scope || S.q.trim() ? "" : installStrip()) + _viewCatalog(scope, focusId); };
 
   /* ---------- kliknięcia i zmiany ---------- */
   document.addEventListener("click", function(e){
@@ -504,9 +630,7 @@
       case "inw-install-x": try { localStorage.setItem("inwh-install-x", "1"); } catch (_){} render(); toast("Instrukcję znajdziesz zawsze pod przyciskiem konta (inicjały w rogu)."); break;
       case "inw-reqs": S.lentFilter = "requests"; go("wypozyczone"); break;
       case "d-only": S.dOnlyAvail = b.dataset.f === "1"; render(); break;
-      case "d-room": S.dSel[S.dBy] = b.dataset.f || ""; render(); break;
-      case "d-by": S.dBy = b.dataset.f === "cat" ? "cat" : "room"; try { localStorage.setItem("inwh-dby", S.dBy); } catch (_){} render(); break;
-      case "d-openall": { var names = Array.from(document.querySelectorAll(".d-grp")).map(function(d){ return openKey(d.dataset.room); }); if (b.dataset.f === "1") names.forEach(function(k){ S.dOpen.add(k); }); else names.forEach(function(k){ S.dOpen.delete(k); }); saveDOpen(); render(); break; }
+      case "d-fam": dFam(b.dataset.f, b.dataset.r || ""); break;
       case "d-item": dItem(id); break;
       case "d-add": { var e2 = S.cat[id]; if (!e2) break; var c = S.dcart.find(function(x){ return x.itemId === id; }); if (e2.q > 1) dItem(id); else if (c){ S.dcart = S.dcart.filter(function(x){ return x.itemId !== id; }); saveDcart(); render(); toast("Usunięto z wniosku: " + e2.n); } else { S.dcart.push({itemId:id, qty:1}); saveDcart(); render(); toast("Dodano do wniosku: " + e2.n); } break; }
       case "d-rm": { S.dcart = S.dcart.filter(function(x){ return x.itemId !== id; }); saveDcart(); if (b.dataset.keep){ var w = $("#sheet"); if (w && w.refreshRows) w.refreshRows(); else closeSheet(); } else closeSheet(); render(); break; }
