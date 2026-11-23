@@ -272,18 +272,6 @@
     return Array.from(m.entries()).map(function(p){ return {name:p[0], o:ord(p[0]), list:p[1]}; })
       .sort(function(a, b){ return a.o - b.o || a.name.localeCompare(b.name, "pl", {numeric:true}); });
   }
-  // dostępność grupy: ile pozycji ma teraz coś wolnego
-  function avOf(E){
-    var t = E.length, a = 0, full = 0, fr = 0;
-    E.forEach(function(d){ if (d.a > 0) a++; if (d.a >= d.q) full++; fr += d.q > 0 ? Math.min(1, Math.max(0, d.a / d.q)) : 0; });
-    return {t:t, a:a, full:full, fr:t ? fr / t : 0};
-  }
-  function avLine(s){
-    if (!s.t) return "pusto";
-    if (s.full === s.t) return s.t === 1 ? "dostępne" : "wszystko dostępne";
-    if (!s.a) return "teraz wszystko zajęte";
-    return "dostępne <b>" + s.a + "</b> z " + s.t + (s.a === s.t ? ", część wydana" : "");
-  }
   var CIC = (function(){
     var s = function(d){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; };
     return {
@@ -356,14 +344,12 @@
     return dHome(all, fams);
   }
   function dHome(all, fams){
-    var E = entriesOf(all, fams), st = avOf(E);
     var html = '<div class="head"><div class="head-text"><div class="eyebrow">Sprzęt hufca</div><h1>Co jest w magazynie</h1></div></div>'
       + '<p class="hint dk-hint">Wybierz kategorię albo wpisz nazwę w wyszukiwarce u góry. Rzeczy dodajesz do wniosku przyciskiem +.</p>'
-      + '<a class="dk-all" href="#wszystko"><span class="dk-ic">' + IC.list + '</span><span class="dk-t"><span class="dk-name">Cały sprzęt</span><span class="dk-av">' + avLine(st) + '</span></span>' + IC.chev + '</a>';
+      + '<a class="dk-all" href="#wszystko"><span class="dk-ic">' + IC.list + '</span><span class="dk-t"><span class="dk-name">Cały sprzęt</span></span>' + IC.chev + '</a>';
     if (all.some(function(e){ return e.k; })){
-      html += '<section class="sec"><div class="sec-head"><h2 class="sec-title">Kategorie</h2></div><div class="dk-grid">' + byCat(E).map(function(g){
-        var s = avOf(g.list);
-        return '<a class="dk-tile' + (s.a ? "" : " dk-none") + '" href="' + dHref("kategoria", g.name) + '"><span class="dk-ic">' + catIcon(g.name) + '</span><span class="dk-name">' + esc(g.name) + '</span><span class="dk-av">' + avLine(s) + '</span></a>';
+      html += '<section class="sec"><div class="sec-head"><h2 class="sec-title">Kategorie</h2></div><div class="dk-grid">' + byCat(entriesOf(all, fams)).map(function(g){
+        return '<a class="dk-tile" href="' + dHref("kategoria", g.name) + '"><span class="dk-ic">' + catIcon(g.name) + '</span><span class="dk-name">' + esc(g.name) + '</span></a>';
       }).join("") + '</div></section>';
     }
     // gdzie co leży: na drugim planie, mniejsze kafelki

@@ -90,13 +90,9 @@ a.dk-all:focus-visible,a.dk-tile:focus-visible,a.dk-place:focus-visible{outline:
 .dk-ic{flex:none;width:42px;height:42px;border-radius:11px;background:var(--surface-2);color:var(--ink-2);display:grid;place-items:center}
 .dk-ic svg{width:23px;height:23px}
 .dk-name{font:700 16px/1.2 var(--f-display);font-stretch:106%;overflow-wrap:anywhere}
-.dk-av{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
-.dk-av b{color:var(--ok);font-weight:700;font-size:15px}
 .dk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (min-width:640px){.dk-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.dk-tile{display:grid;grid-template-rows:auto 1fr auto;gap:7px;min-height:118px;padding:13px 13px 14px;border-radius:14px}
-.dk-tile.dk-none .dk-ic{opacity:.55}
-.dk-tile.dk-none .dk-av{color:var(--ink-3)}
+.dk-tile{display:grid;align-content:start;gap:10px;min-height:96px;padding:13px 13px 14px;border-radius:14px}
 .dk-places{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 @media (min-width:640px){.dk-places{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .dk-place{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:46px;padding:8px 12px;border-radius:10px;font:500 14px/1.25 var(--f-body)}
@@ -3129,7 +3125,7 @@ async function boot(){
 }
 boot();
 </script>
-<script src="./prod.js?v=20261124-kafelki2"></script>
+<script src="./prod.js?v=20261124-kafelki3"></script>
 <script>if ("serviceWorker" in navigator) addEventListener("load", function(){ navigator.serviceWorker.register("./sw.js").catch(function(e){ console.warn("sw", e); }); });</script>
 
 </body></html>
