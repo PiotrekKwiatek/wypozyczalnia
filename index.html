@@ -103,7 +103,7 @@ window.__inwReady = new Promise(function(r){ window.__inwResolve = r; });
 window.claude = {use: function(n){ return window.__inwReady.then(function(a){ return a[n] || null; }); }};
 window.INW_BLOB = window.INW_BLOB || function(){ return ""; };
 </script>
-<script type="module" src="./fb.js"></script>
+<script type="module" src="./fb.js?v=20261123-offline3"></script>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" type="image/png" href="./icons/favicon.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
@@ -3105,7 +3105,7 @@ async function boot(){
 }
 boot();
 </script>
-<script src="./prod.js?v=20261123-offline2"></script>
+<script src="./prod.js?v=20261123-offline3"></script>
 <script>if ("serviceWorker" in navigator) addEventListener("load", function(){ navigator.serviceWorker.register("./sw.js").catch(function(e){ console.warn("sw", e); }); });</script>
 
 </body></html>

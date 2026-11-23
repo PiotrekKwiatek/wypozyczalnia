@@ -1,7 +1,7 @@
 // Wypożyczalnia Hufca: aplikacja na telefonie i praca przy słabym zasięgu.
 // Pliki aplikacji: najpierw sieć (żeby poprawki docierały od razu), bez sieci z pamięci.
 // Dane (Firebase) idą osobno i nie są tu buforowane – Firestore ma własną pamięć offline.
-const CACHE = "wypozyczalnia-20261123c";
+const CACHE = "wypozyczalnia-20261123d";
 const CORE = ["./", "./index.html", "./prod.js", "./fb.js", "./config.js", "./manifest.webmanifest",
   "./icons/apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png",
   "./vendor/firebase-app.js", "./vendor/firebase-auth.js", "./vendor/firebase-firestore.js",
@@ -24,7 +24,8 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   if (url.origin !== location.origin || !url.pathname.startsWith(new URL("./", location).pathname)) return;
   e.respondWith(
-    timed(req, req.mode === "navigate" ? 5000 : 8000)
+    // „no-cache”: zawsze pytamy serwer, czy plik się zmienił (szybkie 304), więc poprawki docierają przy pierwszym otwarciu z internetem
+    timed(new Request(req.url, {cache:"no-cache", credentials:"same-origin"}), req.mode === "navigate" ? 5000 : 8000)
       .then(r => { if (r && r.ok && r.type === "basic"){ const c = r.clone(); caches.open(CACHE).then(x => x.put(req, c)); } return r; })
       .catch(() => caches.match(req, {ignoreSearch:true}).then(r => r || (req.mode === "navigate" ? caches.match("./index.html") : Response.error())))
   );
