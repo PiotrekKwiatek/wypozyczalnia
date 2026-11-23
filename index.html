@@ -85,18 +85,16 @@ a.dk-all:active,a.dk-tile:active,a.dk-place:active{transform:scale(.985);backgro
 a.dk-all:focus-visible,a.dk-tile:focus-visible,a.dk-place:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .dk-all{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;box-shadow:var(--shadow)}
 .dk-all .dk-ic{background:var(--accent);color:var(--on-accent)}
-.dk-t{flex:1;min-width:0;display:grid;gap:5px}
+.dk-t{flex:1;min-width:0;display:grid;gap:3px}
 .dk-all .dk-name{font-size:19px}
 .dk-ic{flex:none;width:42px;height:42px;border-radius:11px;background:var(--surface-2);color:var(--ink-2);display:grid;place-items:center}
 .dk-ic svg{width:23px;height:23px}
 .dk-name{font:700 16px/1.2 var(--f-display);font-stretch:106%;overflow-wrap:anywhere}
 .dk-av{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .dk-av b{color:var(--ok);font-weight:700;font-size:15px}
-.dk-bar{display:block;height:5px;border-radius:99px;background:var(--surface-2);overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
-.dk-bar i{display:block;height:100%;border-radius:inherit;background:var(--ok)}
 .dk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (min-width:640px){.dk-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.dk-tile{display:grid;grid-template-rows:auto 1fr auto auto;gap:7px;min-height:138px;padding:13px 13px 14px;border-radius:14px}
+.dk-tile{display:grid;grid-template-rows:auto 1fr auto;gap:7px;min-height:118px;padding:13px 13px 14px;border-radius:14px}
 .dk-tile.dk-none .dk-ic{opacity:.55}
 .dk-tile.dk-none .dk-av{color:var(--ink-3)}
 .dk-places{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -3131,7 +3129,7 @@ async function boot(){
 }
 boot();
 </script>
-<script src="./prod.js?v=20261124-kafelki"></script>
+<script src="./prod.js?v=20261124-kafelki2"></script>
 <script>if ("serviceWorker" in navigator) addEventListener("load", function(){ navigator.serviceWorker.register("./sw.js").catch(function(e){ console.warn("sw", e); }); });</script>
 
 </body></html>
