@@ -34,8 +34,10 @@ function netUI(){
   const b = netBar(); if (!b) return;
   const off = !navigator.onLine || netTest;
   const waiting = pendingN > 0 && (off || slowHit);
-  if (!off && !waiting){ b.hidden = true; return; }
+  const show = h => { document.body.classList.toggle("has-net", h); document.body.style.setProperty("--net-h", h ? (b.offsetHeight + 10) + "px" : "0px"); };
+  if (!off && !waiting){ b.hidden = true; show(false); return; }
   b.hidden = false; b.classList.toggle("off", off);
+  requestAnimationFrame(() => show(true));
   b.textContent = off ? `Bez internetu: widzisz ostatnio wczytane dane.${pendingN ? ` Zmiany do wysłania: ${pendingN}. Wyślą się same, gdy wróci zasięg.` : " Zmiany zapiszą się w telefonie i wyślą, gdy wróci zasięg."}` : `Wysyłam zmiany (${pendingN})…`;
 }
 addEventListener("online", netUI); addEventListener("offline", netUI);
