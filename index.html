@@ -48,6 +48,9 @@ img.no-blob{visibility:hidden}
 .u-add textarea{width:100%;font:15px var(--f-body);padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
 .u-list{margin-top:10px}
 .chk{display:flex;gap:10px;align-items:center;font-size:15px}.chk input{width:22px;height:22px}
+/* praca bez zasięgu */
+.inw-net{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top, 0px) + 64px);z-index:60;max-width:min(560px, calc(100% - 24px));padding:8px 14px;border-radius:12px;font:500 13px/1.35 var(--f-body);background:var(--lent-bg);color:var(--lent);border:1px solid currentColor;box-shadow:var(--shadow);text-align:center}
+.inw-net.off{background:var(--warn-bg);color:var(--warn)}
 /* instalacja na telefonie */
 .inw-install{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px 12px;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .inw-install>[data-act="inw-install"]{grid-column:2;grid-row:2;justify-self:start;width:auto}
@@ -2771,11 +2774,7 @@ function logEv(k, txt, o){
 }
 async function logWrite(day, id, e){
   const ref = S.db.doc("log/" + day), body = {day, ev:{[id]:e}};
-  try { await retry(() => ref.update(body)); return; }
-  catch (err){ if (!err || (err.code !== "invalid_argument" && err.code !== "not_found")) throw err; }
-  const snap = await ref.get();
-  if (snap.exists) await retry(() => ref.update(body));
-  else await retry(() => ref.set(body));
+  await retry(() => ref.set(body, {merge:true}));
 }
 function diffTxt(rows){
   const s = v => String(v == null ? "" : v).trim();
@@ -3105,7 +3104,7 @@ async function boot(){
 }
 boot();
 </script>
-<script src="./prod.js?v=20261123-wypozyczalnia"></script>
+<script src="./prod.js?v=20261123-offline"></script>
 <script>if ("serviceWorker" in navigator) addEventListener("load", function(){ navigator.serviceWorker.register("./sw.js").catch(function(e){ console.warn("sw", e); }); });</script>
 
 </body></html>

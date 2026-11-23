@@ -3,7 +3,7 @@
 // Hasła nie trafiają do bazy ani do kodu aplikacji: przechowuje je Firebase Authentication jako skróty (scrypt).
 import { initializeApp } from "./vendor/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile, signOut, reload } from "./vendor/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, query, where, orderBy, limit, onSnapshot, getDoc, getDocs, setDoc, updateDoc, deleteDoc, FieldPath } from "./vendor/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, query, where, orderBy, limit, onSnapshot, getDoc, getDocs, setDoc, updateDoc, deleteDoc, FieldPath, disableNetwork, enableNetwork } from "./vendor/firebase-firestore.js";
 import CFG from "./config.js";
 
 const $ = s => document.querySelector(s);
@@ -23,6 +23,33 @@ auth.languageCode = "pl";
 let fs;
 try { fs = initializeFirestore(app, {ignoreUndefinedProperties:true, localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})}); }
 catch (_){ fs = initializeFirestore(app, {ignoreUndefinedProperties:true}); }
+
+/* ---------- praca bez zasięgu ----------
+   Firestore zapisuje zmianę od razu w pamięci telefonu i wysyła ją na serwer, gdy wróci zasięg.
+   Nie czekamy więc w nieskończoność na potwierdzenie serwera: bez sieci zapis uznajemy za przyjęty
+   po chwili, a pasek u góry pokazuje, ile zmian czeka na wysłanie. */
+let pendingN = 0, slowHit = false;
+const netBar = () => { let b = document.getElementById("inw-net"); if (!b && document.body){ b = document.createElement("div"); b.id = "inw-net"; b.className = "inw-net"; b.setAttribute("role", "status"); b.hidden = true; document.body.appendChild(b); } return b; };
+function netUI(){
+  const b = netBar(); if (!b) return;
+  const off = !navigator.onLine || netTest;
+  const waiting = pendingN > 0 && (off || slowHit);
+  if (!off && !waiting){ b.hidden = true; return; }
+  b.hidden = false; b.classList.toggle("off", off);
+  b.textContent = off ? `Bez internetu: widzisz ostatnio wczytane dane.${pendingN ? ` Zmiany do wysłania: ${pendingN}. Wyślą się same, gdy wróci zasięg.` : " Zmiany zapiszą się w telefonie i wyślą, gdy wróci zasięg."}` : `Wysyłam zmiany (${pendingN})…`;
+}
+addEventListener("online", netUI); addEventListener("offline", netUI);
+function W(p){
+  pendingN++; netUI();
+  p.then(() => {}, e => { console.warn("zapis", e); if (typeof window.toast === "function") window.toast("Jednej zmiany nie udało się zapisać na serwerze (" + ((e && e.code) || "błąd") + "). Sprawdź ją jeszcze raz.", "err"); })
+   .finally(() => { pendingN--; if (!pendingN) slowHit = false; netUI(); });
+  const off = !navigator.onLine || netTest;
+  return Promise.race([p, new Promise(res => setTimeout(() => { slowHit = true; netUI(); res(); }, off ? 400 : 10000))]);
+}
+// test pracy offline: ?offline-test w adresie albo INW_NET_TEST.off()/on() w konsoli
+let netTest = false;
+window.INW_NET_TEST = {off:async () => { netTest = true; await disableNetwork(fs); netUI(); return "offline"; }, on:async () => { netTest = false; await enableNetwork(fs); netUI(); return "online"; }, pending:() => pendingN};
+if (new URLSearchParams(location.search).has("offline-test")){ netTest = true; disableNetwork(fs).catch(() => {}); }
 
 /* ---------- baza: to samo API co w Claude ---------- */
 function mapErr(e){
@@ -65,9 +92,9 @@ function mkDoc(path){
   return {
     id:ref.id, path,
     get:() => guard(async () => wDoc(await getDoc(ref))),
-    set:data => guard(() => setDoc(ref, data)),
-    update:data => guard(async () => { const a = flat(data || {}, [], []); if (a.length) await updateDoc(ref, ...a); }),
-    delete:() => guard(() => deleteDoc(ref)),
+    set:(data, opt) => guard(() => W(opt ? setDoc(ref, data, opt) : setDoc(ref, data))),
+    update:data => guard(async () => { const a = flat(data || {}, [], []); if (a.length) await W(updateDoc(ref, ...a)); }),
+    delete:() => guard(() => W(deleteDoc(ref))),
     onSnapshot:(next, err) => onSnapshot(ref, s => next(wDoc(s)), e => { const m = mapErr(e); if (err) err(m); else console.warn(path, m); }),
     collection:sub => mkColl(`${path}/${sub}`)
   };
@@ -102,7 +129,7 @@ const assets = {
     const d = await toDataURL(b);
     if (d.length > 900000) throw Object.assign(new Error("Zdjęcie jest za duże."), {code:"invalid_argument"});
     const r = doc(collection(fs, "blobs"));
-    await guard(() => setDoc(r, {d, at:nowISO(), by:U ? U.uid : ""}));
+    await guard(() => W(setDoc(r, {d, at:nowISO(), by:U ? U.uid : ""})));
     blobs.set(r.id, d);
     return {id:r.id};
   },
@@ -257,11 +284,17 @@ document.addEventListener("click", e => {
 
 /* ---------- rola z listy maili ---------- */
 let roleUnsub = null, started = false;
+const roleKey = em => "inwh-role:" + em;
+const cachedRole = em => { try { return JSON.parse(localStorage.getItem(roleKey(em)) || "null"); } catch (_){ return null; } };
+const keepRole = (em, d) => { try { if (d && d.role) localStorage.setItem(roleKey(em), JSON.stringify({role:d.role, name:d.name || ""})); else localStorage.removeItem(roleKey(em)); } catch (_){} };
 async function roleOf(u){
   const em = u.email.toLowerCase(), ref = doc(fs, "roles", em);
-  let s = null; try { s = await getDoc(ref); } catch (_){ s = null; }
-  if (s && s.exists()) return s.data();
-  try { const d = {role:"admin", name:u.displayName || "", addedAt:nowISO(), addedBy:u.uid, owner:true}; await setDoc(ref, d); return d; } catch (_){}
+  let s = null, failed = false; try { s = await getDoc(ref); } catch (_){ failed = true; }
+  if (s && s.exists()){ keepRole(em, s.data()); return s.data(); }
+  // bez zasięgu: ostatnio sprawdzona rola z tego telefonu
+  if (failed || (s && s.metadata && s.metadata.fromCache)){ const c = cachedRole(em); if (c) return c; if (failed || !navigator.onLine || netTest) return {offline:true}; }
+  try { const d = {role:"admin", name:u.displayName || "", addedAt:nowISO(), addedBy:u.uid, owner:true}; await setDoc(ref, d); keepRole(em, d); return d; } catch (_){}
+  keepRole(em, null);
   return null;
 }
 async function enter(u){
@@ -269,6 +302,11 @@ async function enter(u){
   try { const t = await u.getIdTokenResult(); if (!t.claims.email_verified) await u.getIdToken(true); } catch (_){}
   const r = await roleOf(u);
   const em = u.email.toLowerCase();
+  if (r && r.offline){
+    showCard(`${head}<p>Brak internetu. Pierwsze wejście na tym telefonie musi być z zasięgiem, potem aplikacja działa też bez niego.</p><p class="inw-msg"></p>`);
+    addEventListener("online", () => enter(u), {once:true});
+    return;
+  }
   if (!r || !["admin", "biuro", "druzynowy"].includes(r.role)){
     let req = null; try { const s = await getDoc(doc(fs, "access", u.uid)); req = s.exists() ? s.data() : null; } catch (_){}
     screenNoAccess(u, req);
@@ -282,11 +320,12 @@ async function enter(u){
   setDoc(doc(fs, "users", u.uid), {name:ACC.name, email:em, seen:nowISO(), role:r.role}, {merge:true}).catch(() => {});
   if (roleUnsub) roleUnsub();
   let first = true;
-  roleUnsub = onSnapshot(doc(fs, "roles", em), s => { if (first){ first = false; return; } const d = s.exists() ? s.data() : null; if (!d || d.role !== ACC.role) location.reload(); }, () => location.reload());
+  roleUnsub = onSnapshot(doc(fs, "roles", em), s => { if (first){ first = false; return; } if (s.metadata && s.metadata.fromCache) return; const d = s.exists() ? s.data() : null; keepRole(em, d); if (!d || d.role !== ACC.role) location.reload(); }, () => location.reload());
   hideCard();
   const ab = document.getElementById("acct-btn");
   if (ab){ ab.hidden = false; ab.textContent = ACC.name.split(/\s+/).map(w => w[0] || "").join("").slice(0, 2).toUpperCase() || "?"; ab.title = ACC.name; }
   if (!started){ started = true; window.__inwResolve({db, user, assets, downloads}); }
+  netUI();
 }
 onAuthStateChanged(auth, async u => {
   if (!u){ if (started) location.reload(); else screenLogin(); return; }
